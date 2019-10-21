@@ -91,7 +91,7 @@ func (sl *SkipList) Insert(obj string, score ScoreInterface) {
 		update[i] = x
 	}
 
-	level := rand.Intn(sl.MaxLevel)
+	level := rand.Intn(sl.MaxLevel) + 1
 	if level > sl.LevelNum {
 		for i := sl.LevelNum; i < level; i++ {
 			rank[i] = 0
