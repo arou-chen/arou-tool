@@ -6,20 +6,20 @@ package skiplist
 
 import "math/rand"
 
-type ObjInterface interface {
-	GetKey() string
-	IsValid() bool
-	Compare(obj ObjInterface) int
-}
+//type ObjInterface interface {
+//	GetKey() string
+//	IsValid() bool
+//	Compare(obj ObjInterface) int
+//}
 
 type ScoreInterface interface {
-	Compare(obj ScoreInterface) int
-	GetValue() ScoreInterface
-	IsValid() bool
+	Compare(obj interface{}) int
+	//GetValue() ScoreInterface
+	//IsValid() bool
 }
 
 type Node struct {
-	Obj ObjInterface
+	Obj string
 	Score ScoreInterface
 	BackWard *Node
 	LevelInfo []*Level
@@ -35,25 +35,25 @@ type SkipList struct {
 	Tail *Node
 	Length int
 	LevelNum int
-	RandNum int
+	MaxLevel int
 }
 
-func CreateSkipList(maxLevel int, randNum int) *SkipList {
+func CreateSkipList(maxLevel int) *SkipList {
 	sl := new(SkipList)
 
 	sl.LevelNum = 1
 	sl.Length = 0
-	sl.Header = sl.CreateNode(0, nil, nil)
-	sl.RandNum = randNum
+	sl.Header = sl.CreateNode(0, "", nil)
+	sl.MaxLevel = maxLevel
+	sl.Header.LevelInfo = make([]*Level, maxLevel)
 	for i := 0; i < maxLevel; i++ {
-		sl.Header.LevelInfo[i].Forward = nil
-		sl.Header.LevelInfo[i].Span = 0
+		sl.Header.LevelInfo[i] = &Level{}
 	}
 
 	return sl
 }
 
-func (sl *SkipList) CreateNode(level int, obj ObjInterface, score ScoreInterface) *Node {
+func (sl *SkipList) CreateNode(level int, obj string, score ScoreInterface) *Node {
 	node := new(Node)
 	node.LevelInfo = make([]*Level, level)
 	node.Obj = obj
@@ -61,12 +61,12 @@ func (sl *SkipList) CreateNode(level int, obj ObjInterface, score ScoreInterface
 	return node
 }
 
-func (sl *SkipList) Insert(obj ObjInterface, score ScoreInterface) {
-	if !obj.IsValid() || !score.IsValid() {
+func (sl *SkipList) Insert(obj string, score ScoreInterface) {
+	if obj == "" {
 		return
 	}
-	var rank [sl.LevelNum]int
-	var update [sl.LevelNum]*Node
+	rank := make([]int, sl.MaxLevel)
+	update := make([]*Node, sl.MaxLevel)
 	x := sl.Header
 
 	for i := sl.LevelNum-1; i >= 0; i-- {
@@ -76,20 +76,22 @@ func (sl *SkipList) Insert(obj ObjInterface, score ScoreInterface) {
 			rank[i] = rank[i+1]
 		}
 		for {
-			compareScore := score.Compare(x.LevelInfo[i].Forward.Score)
-			compareKey := obj.Compare(x.LevelInfo[i].Forward.Obj)
+			//compareScore := score.Compare(x.LevelInfo[i].Forward.Score)
+			//compareKey := obj >= x.LevelInfo[i].Forward.Obj
 			if x.LevelInfo[i].Forward != nil && (
-				compareScore == 1 || (compareScore == 0 && compareKey == 1)) {
+				score.Compare(x.LevelInfo[i].Forward.Score) == 1 ||
+					(score.Compare(x.LevelInfo[i].Forward.Score) == 0 && obj > x.LevelInfo[i].Forward.Obj)) {
 				rank[i] += x.LevelInfo[i].Span
 				x = x.LevelInfo[i].Forward
 			} else {
 				break
 			}
 		}
+		update[i] = &Node{}
 		update[i] = x
 	}
 
-	level := rand.Intn(sl.RandNum)
+	level := rand.Intn(sl.MaxLevel)
 	if level > sl.LevelNum {
 		for i := sl.LevelNum; i < level; i++ {
 			rank[i] = 0
@@ -101,7 +103,8 @@ func (sl *SkipList) Insert(obj ObjInterface, score ScoreInterface) {
 
 	x = sl.CreateNode(level, obj, score)
 	for i := 0; i < level; i++ {
-		x.LevelInfo[i] .Forward = update[i].LevelInfo[i].Forward
+		x.LevelInfo[i] = &Level{}
+		x.LevelInfo[i].Forward = update[i].LevelInfo[i].Forward
 		update[i].LevelInfo[i].Forward = x
 		randDelta := rank[0]-rank[i]
 		x.LevelInfo[i].Span = update[i].LevelInfo[i].Span - (randDelta)
@@ -127,17 +130,16 @@ func (sl *SkipList) Insert(obj ObjInterface, score ScoreInterface) {
 	sl.Length++
 }
 
-func (sl *SkipList)GetRank(obj ObjInterface, score ScoreInterface) int {
+func (sl *SkipList)GetRank(obj string, score ScoreInterface) int {
 	var x *Node
 	var rank int
 
 	x = sl.Header
 	for i := sl.LevelNum - 1; i >= 0; i-- {
 		for {
-			scoreCompare := score.Compare(x.LevelInfo[i].Forward.Score)
-			objCompare := obj.Compare(x.LevelInfo[i].Forward.Obj)
 			if x.LevelInfo[i].Forward != nil && (
-				scoreCompare == 1 || (scoreCompare == 0 && objCompare >= 0)) {
+				score.Compare(x.LevelInfo[i].Forward.Score) == 1 ||
+					(score.Compare(x.LevelInfo[i].Forward.Score) == 0 && obj >= x.LevelInfo[i].Forward.Obj)) {
 				rank += x.LevelInfo[i].Span
 				x = x.LevelInfo[i].Forward
 			} else {
@@ -145,7 +147,7 @@ func (sl *SkipList)GetRank(obj ObjInterface, score ScoreInterface) int {
 			}
 		}
 
-		if x.Obj != nil && obj.Compare(x.Obj) == 0 {
+		if x.Obj != "" && obj == x.Obj {
 			return rank
 		}
 	}
@@ -158,7 +160,7 @@ func (sl *SkipList) GetObjByRank(rank int) *Node {
 	var traversed int
 
 	x = sl.Header
-	for i := sl.LevelNum - 1; i >= 0; i++ {
+	for i := sl.LevelNum - 1; i >= 0; i-- {
 		for {
 			if x.LevelInfo[i].Forward != nil && (traversed + x.LevelInfo[i].Span) <= rank {
 				traversed += x.LevelInfo[i].Span
@@ -176,30 +178,29 @@ func (sl *SkipList) GetObjByRank(rank int) *Node {
 	return nil
 }
 
-func (sl *SkipList) Delete(obj ObjInterface, score ScoreInterface) bool {
+func (sl *SkipList) Delete(obj string, score ScoreInterface) bool {
 	update := make([]*Node, sl.LevelNum)
 	var x *Node
 
 	x = sl.Header
 	for i := sl.LevelNum - 1; i >= 0; i-- {
 		for {
-			scoreCompare := score.Compare(x.LevelInfo[i].Forward.Score)
-			objCompare := obj.Compare(x.LevelInfo[i].Forward.Obj)
 			if x.LevelInfo[i].Forward != nil && (
-				scoreCompare == 1 || (scoreCompare == 0 && objCompare > 0)) {
+				score.Compare(x.LevelInfo[i].Forward.Score) == 1 ||
+					(score.Compare(x.LevelInfo[i].Forward.Score) == 0 && obj > x.LevelInfo[i].Forward.Obj)) {
 					x = x.LevelInfo[i].Forward
 			} else {
 				break
 			}
 		}
+		update[i] = &Node{}
 		update[i] = x
 	}
 
 	x = x.LevelInfo[0].Forward
 	if x != nil {
 		scoreCompare := score.Compare(x.Score)
-		objCompare := obj.Compare(x.Obj)
-		if scoreCompare == 0 && objCompare == 0 {
+		if scoreCompare == 0 && obj == x.Obj {
 			sl.DeleteNode(x, update)
 			//arou 会不会有内存释放问题
 			x = &Node{}
